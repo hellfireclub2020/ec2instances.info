@@ -81,6 +81,7 @@ def scrape_cache(c):
 
 @task
 def serve(c):
+
     class MyHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
         def do_GET(self):
             # The URL does not include ".html". Add it to serve the file for dev
@@ -92,10 +93,9 @@ def serve(c):
     os.chdir("www/")
     httpd = socketserver.TCPServer((HTTP_HOST, int(HTTP_PORT)), MyHandler)
     print(
-        "Serving on http://{}:{}".format(
-            httpd.socket.getsockname()[0], httpd.socket.getsockname()[1]
-        )
+        f"Serving on http://{httpd.socket.getsockname()[0]}:{httpd.socket.getsockname()[1]}"
     )
+
     httpd.serve_forever()
 
 
@@ -146,7 +146,7 @@ def deploy(c, root_dir="www"):
                 continue
             local_path = os.path.join(root, name)
             remote_path = local_path[len(root_dir) + 1 :]
-            print("%s -> %s/%s" % (local_path, BUCKET_NAME, remote_path))
+            print(f"{local_path} -> {BUCKET_NAME}/{remote_path}")
             k = Key(bucket)
             k.key = remote_path
 

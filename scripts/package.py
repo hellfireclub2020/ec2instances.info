@@ -10,7 +10,7 @@ root_dir = (
 
 
 def path(s):
-    return "{}/{}".format(root_dir, s)
+    return f"{root_dir}/{s}"
 
 
 # Create the output directory
@@ -27,12 +27,12 @@ with open(path("ec2instances/info/__init__.py"), "w+") as output:
     #
     with open(path("www/instances.json"), "r") as input:
         ec2 = json.loads(input.read())
-        output.write("ec2 = {}".format(pprint.pformat(ec2)))
+        output.write(f"ec2 = {pprint.pformat(ec2)}")
 
     output.write("\n")
 
     with open(path("www/rds/instances.json"), "r") as input:
         rds = json.loads(input.read())
-        output.write("rds = {}".format(pprint.pformat(rds)))
+        output.write(f"rds = {pprint.pformat(rds)}")
 
     output.write("\n")
