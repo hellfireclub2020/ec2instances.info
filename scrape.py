@@ -151,7 +151,7 @@ class Instance(object):
         return d
 
     def __repr__(self):
-        return "<Instance {}>".format(self.instance_type)
+        return f"<Instance {self.instance_type}>"
 
 
 def sanitize_instance_type(instance_type):
@@ -181,14 +181,10 @@ def transform_size(size):
         return "small"
     if size == "med":
         return "medium"
-    m = re.search("^(x+)l$", size)
-    if m:
-        xs = len(m.group(1))
-        if xs == 1:
-            return "xlarge"
-        else:
-            return str(xs) + "xlarge"
-    assert size == "lg", "Unable to parse size: %s" % (size,)
+    if m := re.search("^(x+)l$", size):
+        xs = len(m[1])
+        return "xlarge" if xs == 1 else f"{xs}xlarge"
+    assert size == "lg", f"Unable to parse size: {size}"
     return "large"
 
 
@@ -204,9 +200,9 @@ def transform_region(reg):
         return region_map[reg]
     m = re.search(r"^([^0-9]*)(-(\d))?$", reg)
     assert m, "Can't parse region: %s" % (reg,)
-    base = m.group(1)
-    num = m.group(3) or "1"
-    return base + "-" + num
+    base = m[1]
+    num = m[3] or "1"
+    return f"{base}-{num}"
 
 
 def add_ebs_pricing(imap, data):
@@ -217,11 +213,7 @@ def add_ebs_pricing(imap, data):
             for i_spec in t_spec["sizes"]:
                 i_type = i_spec["size"]
                 if i_type not in imap:
-                    print(
-                        "ERROR: Got EBS pricing data for unknown instance type: {}".format(
-                            i_type
-                        )
-                    )
+                    print(f"ERROR: Got EBS pricing data for unknown instance type: {i_type}")
                     continue
                 inst = imap[i_type]
                 inst.pricing.setdefault(region, {})
@@ -280,7 +272,7 @@ def add_eni_info(instances):
         # handle <cards>x<interfaces> format
         if "per network card" in max_enis:
             match = re.search(r"per network card \((.*)\)", max_enis)
-            eni_values = match.group(1).replace("or", "").replace(" ", "").split(",")
+            eni_values = match[1].replace("or", "").replace(" ", "").split(",")
             max_enis = sorted(list(map(int, eni_values)))[-1]
         else:
             max_enis = locale.atoi(max_enis)
@@ -288,11 +280,7 @@ def add_eni_info(instances):
         ip_per_eni = locale.atoi(etree.tostring(r[2], method="text").decode())
 
         if instance_type not in by_type:
-            print(
-                "WARNING: Ignoring ENI data for unknown instance type: {}".format(
-                    instance_type
-                )
-            )
+            print(f"WARNING: Ignoring ENI data for unknown instance type: {instance_type}")
             continue
         if not by_type[instance_type].vpc:
             print(
@@ -405,7 +393,7 @@ def add_linux_ami_info(instances):
                 supported_types.append("PV")
         except Exception as e:
             # 2018-08-01: handle missing cells on last row in this table...
-            print("Exception while parsing AMI info for {}: {}".format(family_id, e))
+            print(f"Exception while parsing AMI info for {family_id}: {e}")
 
         # Apply types for this instance family to all matching instances
         for i in instances:
@@ -421,12 +409,16 @@ def add_linux_ami_info(instances):
     # Some background info at https://github.com/powdahound/ec2instances.info/pull/161
     for i in instances:
         i_family_id = i.instance_type.split(".")[0]
-        if i_family_id in ("cc2", "cg1", "hi1", "hs1"):
-            if not "HVM" in i.linux_virtualization_types:
-                i.linux_virtualization_types.append("HVM")
-        if i_family_id in ("t1", "m1", "m2", "c1", "hi1", "hs1"):
-            if not "PV" in i.linux_virtualization_types:
-                i.linux_virtualization_types.append("PV")
+        if (
+            i_family_id in ("cc2", "cg1", "hi1", "hs1")
+            and "HVM" not in i.linux_virtualization_types
+        ):
+            i.linux_virtualization_types.append("HVM")
+        if (
+            i_family_id in ("t1", "m1", "m2", "c1", "hi1", "hs1")
+            and "PV" not in i.linux_virtualization_types
+        ):
+            i.linux_virtualization_types.append("PV")
 
 
 def add_vpconly_detail(instances):
@@ -485,18 +477,17 @@ def add_instance_storage_details(instances):
             if i.instance_type == instance_type:
                 i.ebs_only = True
 
-                # Supports "24 x 13,980 GB" and "2 x 1,200 GB (2.4 TB)"
-                m = re.search(r"(\d+)\s*x\s*([0-9,]+)?\s+(\w{2})?", storage_volumes)
-
-                if m:
+                if m := re.search(
+                    r"(\d+)\s*x\s*([0-9,]+)?\s+(\w{2})?", storage_volumes
+                ):
                     size_unit = "GB"
 
-                    if m.group(3):
-                        size_unit = m.group(3)
+                    if m[3]:
+                        size_unit = m[3]
 
                     i.ebs_only = False
-                    i.num_drives = locale.atoi(m.group(1))
-                    i.drive_size = locale.atoi(m.group(2))
+                    i.num_drives = locale.atoi(m[1])
+                    i.drive_size = locale.atoi(m[2])
                     i.size_unit = size_unit
                     i.ssd = "SSD" in storage_type
                     i.nvme_ssd = "NVMe" in storage_type
@@ -523,7 +514,7 @@ def add_t2_credits(instances):
     for r in rows:
         if len(r) > 1:
             inst_type = totext(r[0])
-            if not inst_type in by_type:
+            if inst_type not in by_type:
                 print(
                     f"WARNING: skipping unknown instance type '{inst_type}' in CPU credit info table"
                 )
@@ -634,9 +625,7 @@ def add_emr_info(instances):
     for inst in instances:
         for region in inst.pricing:
             try:
-                emr_price = {}
-                # The frontend expects ["emr"]["emr"] for some reason
-                emr_price["emr"] = emr_prices[region_map[region]][inst.instance_type]
+                emr_price = {"emr": emr_prices[region_map[region]][inst.instance_type]}
                 inst.pricing[region]["emr"] = emr_price
                 # TODO: this is set for the whole instance when it should be per-region
                 inst.emr = True
@@ -1025,17 +1014,17 @@ def add_placement_groups(instances):
         ],
     }
 
+    excpt = placement_group_data["exceptions"]
+    prev_geni = placement_group_data["prev_gen_instances"]
+    prev_genf = placement_group_data["prev_gen_families"]
     for inst in instances:
         itype = inst.instance_type
-        excpt = placement_group_data["exceptions"]
-        prev_geni = placement_group_data["prev_gen_instances"]
-        prev_genf = placement_group_data["prev_gen_families"]
-        if itype[0:2] in excpt:
+        if itype[:2] in excpt:
             inst.placement_group_support = False
         elif (
             inst.generation == "previous"
             and itype not in prev_geni
-            and itype[0:2] not in prev_genf
+            and itype[:2] not in prev_genf
         ):
             inst.placement_group_support = False
 

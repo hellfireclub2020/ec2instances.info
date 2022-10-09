@@ -55,15 +55,11 @@ def description(id):
 
     # Some instances say "Low to moderate" for bandwidth, ignore them
     try:
-        bandwidth = " and {} Gibps of bandwidth.".format(
-            int(id["Networking"][0]["value"])
-        )
+        bandwidth = f' and {int(id["Networking"][0]["value"])} Gibps of bandwidth.'
     except:
         bandwidth = "."
 
-    return "The {} instance is a {} instance with {} vCPUs, {} GiB of memory{}".format(
-        name, family_category, cpus, memory, bandwidth
-    )
+    return f"The {name} instance is a {family_category} instance with {cpus} vCPUs, {memory} GiB of memory{bandwidth}"
 
 
 def community(instance, links):
@@ -105,10 +101,12 @@ def unavailable_instances(itype, instance_details):
                 denylist.append([aws_regions[r], r, "All", "*"])
             else:
                 instance_regions_oss = instance_details["Pricing"][r].keys()
-                for os in ec2_os.keys():
-                    if os not in instance_regions_oss:
-                        denylist.append([aws_regions[r], r, ec2_os[os], os])
-                        # print("Found that {} is not available in {} as {}".format(itype, r, os))
+                denylist.extend(
+                    [aws_regions[r], r, value, os]
+                    for os, value in ec2_os.items()
+                    if os not in instance_regions_oss
+                )
+
     return denylist
 
 
@@ -122,7 +120,7 @@ def assemble_the_families(instances):
     for i in instances:
         name = i["instance_type"]
         itype, suffix = name.split(".")
-        variant = itype[0:2]
+        variant = itype[:2]
 
         if variant not in variant_families:
             variant_families[variant] = [[itype, name]]
@@ -165,7 +163,7 @@ def prices(pricing):
         for os, _p in p.items():
             display_prices[region][os] = {}
 
-            if os == "ebs" or os == "emr":
+            if os in ["ebs", "emr"]:
                 continue
 
             # Doing a lot of work to deal with prices having up to 6 places
@@ -182,21 +180,13 @@ def prices(pricing):
                 display_prices[region][os]["spot"] = "N/A"
 
             try:
-                reserved = {}
-                for k, v in _p["reserved"].items():
-                    if "Term1" in k:
-                        key = k[7:]
-                        reserved[key] = v
+                reserved = {k[7:]: v for k, v in _p["reserved"].items() if "Term1" in k}
                 display_prices[region][os]["_1yr"] = reserved
             except KeyError:
                 display_prices[region][os]["_1yr"] = "N/A"
 
             try:
-                reserved = {}
-                for k, v in _p["reserved"].items():
-                    if "Term3" in k:
-                        key = k[7:]
-                        reserved[key] = v
+                reserved = {k[7:]: v for k, v in _p["reserved"].items() if "Term3" in k}
                 display_prices[region][os]["_3yr"] = reserved
             except KeyError:
                 display_prices[region][os]["_3yr"] = "N/A"
@@ -229,8 +219,9 @@ def load_service_attributes():
                 "style": row[4],
                 "regex": row[5],
                 "value": None,
-                "variant_family": row[1][0:2],
+                "variant_family": row[1][:2],
             }
+
 
     return display_map
 
@@ -240,15 +231,14 @@ def format_attribute(display):
     if display["regex"]:
         toparse = str(display["value"])
         regex = str(display["regex"])
-        match = re.search(regex, toparse)
-        if match:
+        if match := re.search(regex, toparse):
             display["value"] = match.group()
-        # else:
-        #     print("No match found for {} with regex {}".format(toparse, regex))
+            # else:
+            #     print("No match found for {} with regex {}".format(toparse, regex))
 
     if display["style"]:
         v = str(display["value"]).lower()
-        if v == "false" or v == "0" or v == "none":
+        if v in {"false", "0", "none"}:
             display["style"] = "value value-false"
         elif v == "current":
             display["style"] = "value value-current"
@@ -278,10 +268,7 @@ def map_ec2_attributes(i, imap):
     ]
 
     # Group attributes into categories which are then displayed in sections on the page
-    instance_details = {}
-    for c in categories:
-        instance_details[c] = []
-
+    instance_details = {c: [] for c in categories}
     for j, k in i.items():
         # Some attributes like storage have nested values that we handle differently
         if j not in special_attributes:
@@ -329,7 +316,7 @@ def build_detail_pages_ec2(instances, destination_file):
     for i in instances:
         instance_type = i["instance_type"]
 
-        instance_page = os.path.join(subdir, instance_type + ".html")
+        instance_page = os.path.join(subdir, f"{instance_type}.html")
         instance_details = map_ec2_attributes(i, imap)
         fam = fam_lookup[instance_type]
         fam_members = ifam[fam]
@@ -338,7 +325,7 @@ def build_detail_pages_ec2(instances, destination_file):
         denylist = unavailable_instances(instance_type, instance_details)
         defaults = initial_prices(instance_details)
 
-        print("Rendering %s to detail page %s..." % (instance_type, instance_page))
+        print(f"Rendering {instance_type} to detail page {instance_page}...")
         with io.open(instance_page, "w+", encoding="utf-8") as fh:
             try:
                 fh.write(
@@ -349,17 +336,18 @@ def build_detail_pages_ec2(instances, destination_file):
                         links=links,
                         unavailable=denylist,
                         defaults=defaults,
-                        variants=variants[instance_type[0:2]],
+                        variants=variants[instance_type[:2]],
                     )
                 )
+
                 sitemap.append(instance_page)
             except:
                 render_err = mako.exceptions.text_error_template().render()
-                err = {"e": "ERROR for " + instance_type, "t": render_err}
+                err = {"e": f"ERROR for {instance_type}", "t": render_err}
 
                 could_not_render.append(err)
 
-    [print(err["e"], "{}".format(err["t"])) for err in could_not_render]
+    [print(err["e"], f'{err["t"]}') for err in could_not_render]
     [print(page["e"]) for page in could_not_render]
 
     return sitemap

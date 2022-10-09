@@ -78,15 +78,11 @@ def description(id):
 
     # Some instances say "Low to moderate" for bandwidth, ignore them
     try:
-        bandwidth = " and {} Gibps of bandwidth.".format(
-            int(id["Networking"][0]["value"])
-        )
+        bandwidth = f' and {int(id["Networking"][0]["value"])} Gibps of bandwidth.'
     except:
         bandwidth = "."
 
-    return "The {} instance is in the {} family and has {} vCPUs, {} GiB of memory{}".format(
-        name, family_category, cpus, memory, bandwidth
-    )
+    return f"The {name} instance is in the {family_category} family and has {cpus} vCPUs, {memory} GiB of memory{bandwidth}"
 
 
 def community(instance, links):
@@ -113,10 +109,12 @@ def unavailable_instances(itype, instance_details):
                 denylist.append([aws_regions[r], r, "All", "*"])
             else:
                 instance_regions_oss = instance_details["Pricing"][r].keys()
-                for os in rds_engine_mapping.values():
-                    if os not in instance_regions_oss:
-                        denylist.append([aws_regions[r], r, os, os])
-                        # print("Found that {} is not available in {} as {}".format(itype, r, os))
+                denylist.extend(
+                    [aws_regions[r], r, os, os]
+                    for os in rds_engine_mapping.values()
+                    if os not in instance_regions_oss
+                )
+
     return denylist
 
 
@@ -131,7 +129,7 @@ def assemble_the_families(instances):
         name = i["instance_type"]
         itype = name.split(".")[1]
         suffix = "".join(name.split(".")[2:])
-        variant = itype[0:2]
+        variant = itype[:2]
 
         if variant not in variant_families:
             variant_families[variant] = [[itype, name]]
@@ -184,21 +182,13 @@ def prices(pricing):
                 display_prices[region][os]["ondemand"] = "N/A"
 
             try:
-                reserved = {}
-                for k, v in _p["reserved"].items():
-                    if "Term1" in k:
-                        key = k[7:]
-                        reserved[key] = v
+                reserved = {k[7:]: v for k, v in _p["reserved"].items() if "Term1" in k}
                 display_prices[region][os]["_1yr"] = reserved
             except KeyError:
                 display_prices[region][os]["_1yr"] = "N/A"
 
             try:
-                reserved = {}
-                for k, v in _p["reserved"].items():
-                    if "Term3" in k:
-                        key = k[7:]
-                        reserved[key] = v
+                reserved = {k[7:]: v for k, v in _p["reserved"].items() if "Term3" in k}
                 display_prices[region][os]["_3yr"] = reserved
             except KeyError:
                 display_prices[region][os]["_3yr"] = "N/A"
@@ -236,8 +226,9 @@ def load_service_attributes():
                 "style": row[4],
                 "regex": row[5],
                 "value": None,
-                "variant_family": row[1][0:2],
+                "variant_family": row[1][:2],
             }
+
 
     return display_map
 
@@ -253,10 +244,7 @@ def map_rds_attributes(i, imap):
         "Not Shown",
         "Coming Soon",
     ]
-    instance_details = {}
-    for c in categories:
-        instance_details[c] = []
-
+    instance_details = {c: [] for c in categories}
     # For up to date display names, inspect meta/service_attributes_ec2.csv
     for j, k in i.items():
 
@@ -266,11 +254,10 @@ def map_rds_attributes(i, imap):
         if display["regex"]:
             toparse = str(display["value"])
             regex = str(display["regex"])
-            match = re.search(regex, toparse)
-            if match:
+            if match := re.search(regex, toparse):
                 display["value"] = match.group()
-            # else:
-            #     print("No match found for {} with regex {}".format(toparse, regex))
+                    # else:
+                    #     print("No match found for {} with regex {}".format(toparse, regex))
 
         if display["style"]:
             v = str(display["value"]).lower()
@@ -278,9 +265,9 @@ def map_rds_attributes(i, imap):
             if display["cloud_key"] == "currentGeneration" and v == "yes":
                 display["style"] = "value value-current"
                 display["value"] = "current"
-            elif v == "false" or v == "0" or v == "none":
+            elif v in {"false", "0", "none"}:
                 display["style"] = "value value-false"
-            elif v == "true" or v == "1" or v == "yes":
+            elif v in {"true", "1", "yes"}:
                 display["style"] = "value value-true"
             elif display["cloud_key"] == "currentGeneration" and v == "no":
                 display["style"] = "value value-previous"
@@ -325,7 +312,7 @@ def build_detail_pages_rds(instances, destination_file):
     for i in instances:
         instance_type = i["instance_type"]
 
-        instance_page = os.path.join(subdir, instance_type + ".html")
+        instance_page = os.path.join(subdir, f"{instance_type}.html")
         instance_details = map_rds_attributes(i, imap)
         fam = fam_lookup[instance_type]
         fam_members = ifam[fam]
@@ -334,7 +321,7 @@ def build_detail_pages_rds(instances, destination_file):
         denylist = unavailable_instances(instance_type, instance_details)
         defaults = initial_prices(instance_details, instance_type)
 
-        print("Rendering %s to detail page %s..." % (instance_type, instance_page))
+        print(f"Rendering {instance_type} to detail page {instance_page}...")
         with io.open(instance_page, "w+", encoding="utf-8") as fh:
             try:
                 fh.write(
@@ -351,12 +338,12 @@ def build_detail_pages_rds(instances, destination_file):
                 sitemap.append(instance_page)
             except:
                 render_err = mako.exceptions.text_error_template().render()
-                err = {"e": "ERROR for " + instance_type, "t": render_err}
+                err = {"e": f"ERROR for {instance_type}", "t": render_err}
 
                 could_not_render.append(err)
-        # break
+            # break
 
-    [print(err["e"], "{}".format(err["t"])) for err in could_not_render]
+    [print(err["e"], f'{err["t"]}') for err in could_not_render]
     [print(page["e"]) for page in could_not_render]
 
     return sitemap

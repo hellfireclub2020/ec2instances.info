@@ -79,11 +79,7 @@ def _compress_pricing(d):
             prices_dict[k] = nk = prices_index
             prices_index += 1
 
-        if isinstance(v, dict):
-            nv = dict(_compress_pricing(v))
-        else:
-            nv = v
-
+        nv = dict(_compress_pricing(v)) if isinstance(v, dict) else v
         yield nk, nv
 
 
@@ -99,17 +95,17 @@ def compress_pricing(instances):
 
 
 def compress_instance_azs(instances):
-    instance_type_region_availability_zones = {}
-    for inst in instances:
-        if "instance_type" in inst and "availability_zones" in inst:
-            instance_type_region_availability_zones[inst["instance_type"]] = inst[
-                "availability_zones"
-            ]
+    instance_type_region_availability_zones = {
+        inst["instance_type"]: inst["availability_zones"]
+        for inst in instances
+        if "instance_type" in inst and "availability_zones" in inst
+    }
+
     return json.dumps(instance_type_region_availability_zones)
 
 
 def about_page(destination_file="www/about.html"):
-    print("Rendering to %s..." % destination_file)
+    print(f"Rendering to {destination_file}...")
     lookup = mako.lookup.TemplateLookup(directories=["."])
     template = mako.template.Template(filename="in/about.html.mako", lookup=lookup)
     generated_at = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
@@ -129,11 +125,11 @@ def build_sitemap(sitemap):
         surl = url.replace("www/", "")
         if "index" in surl:
             surl = surl.replace("index", "")
-        surls.append("<url><loc>{}/{}</loc></url>".format(HOST, surl[0:-5]))
+        surls.append(f"<url><loc>{HOST}/{surl[:-5]}</loc></url>")
     surls.append("</urlset>")
 
     destination_file = "www/sitemap.xml"
-    print("Rendering all URLs to %s..." % destination_file)
+    print(f"Rendering all URLs to {destination_file}...")
     with io.open(destination_file, "w+") as fp:
         fp.write("\n".join(surls))
 
@@ -145,7 +141,7 @@ def render(data_file, template_file, destination_file):
     with open(data_file, "r") as f:
         instances = json.load(f)
 
-    print("Loading data from %s..." % data_file)
+    print(f"Loading data from {data_file}...")
     for i in instances:
         add_render_info(i)
     pricing_json = compress_pricing(instances)
@@ -158,7 +154,7 @@ def render(data_file, template_file, destination_file):
     elif data_file == "www/rds/instances.json":
         sitemap.extend(build_detail_pages_rds(instances, destination_file))
 
-    print("Rendering to %s..." % destination_file)
+    print(f"Rendering to {destination_file}...")
     os.makedirs(os.path.dirname(destination_file), exist_ok=True)
     with io.open(destination_file, "w+", encoding="utf-8") as fh:
         try:

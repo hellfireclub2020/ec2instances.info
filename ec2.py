@@ -60,7 +60,7 @@ def translate_reserved_terms(term_attributes):
 
 # The pricing API requires human readable names for some reason
 def get_region_descriptions():
-    result = dict()
+    result = {}
     # Source: https://github.com/boto/botocore/blob/develop/botocore/data/endpoints.json
     endpoint_file = resource_filename("botocore", "data/endpoints.json")
     with open(endpoint_file, "r") as f:
@@ -120,7 +120,7 @@ def get_instances():
 
             if instance_type in ["u-6tb1", "u-9tb1", "u-12tb1"]:
                 # API returns the name without the .metal suffix
-                instance_type = instance_type + ".metal"
+                instance_type = f"{instance_type}.metal"
 
             if instance_type in instances:
                 continue
@@ -188,9 +188,7 @@ def add_pricing(imap):
                 inst.pricing.setdefault(region, {})
                 inst.pricing[region].setdefault(platform, {})
                 inst.pricing[region][platform]["ondemand"] = get_ondemand_pricing(terms)
-                # Some instances don't offer reserved terms at all
-                reserved = get_reserved_pricing(terms)
-                if reserved:
+                if reserved := get_reserved_pricing(terms):
                     inst.pricing[region][platform]["reserved"] = reserved
             except Exception as e:
                 # print more details about the instance for debugging
@@ -211,10 +209,7 @@ def get_ondemand_pricing(terms):
         price_dimensions = ondemand_terms.get(ondemand_term).get("priceDimensions")
         for price_dimension in price_dimensions.keys():
             price = price_dimensions.get(price_dimension).get("pricePerUnit").get("USD")
-    if not price:
-        # print(f"WARNING: No USD price found")
-        return 0.0
-    return format_price(price)
+    return format_price(price) if price else 0.0
 
 
 def get_reserved_pricing(terms):
@@ -250,7 +245,7 @@ def add_spot_pricing(imap):
     # get a list of all available regions across all instance types
     regions = []
     for instance_type in instance_types:
-        regions += [r for r in imap[instance_type].pricing.keys()]
+        regions += list(imap[instance_type].pricing.keys())
     # deduplicate list of regions
     regions = list(dict.fromkeys(regions))
     for region in regions:
@@ -269,7 +264,7 @@ def add_spot_pricing(imap):
                     platform = translate_platform_name(
                         price["ProductDescription"], "NA"
                     )
-                    region = price["AvailabilityZone"][0:-1]
+                    region = price["AvailabilityZone"][:-1]
                     if region in inst.pricing:
                         inst.pricing[region].setdefault(platform, {})
                         inst.pricing[region][platform].setdefault("spot", [])
@@ -358,10 +353,7 @@ def parse_instance(instance_type, product_attributes, api_description):
 
     try:
         ecu = product_attributes.get("ecu")
-        if ecu == "Variable":
-            i.ECU = "variable"
-        else:
-            i.ECU = locale.atof(ecu)
+        i.ECU = "variable" if ecu == "Variable" else locale.atof(ecu)
     except:
         pass
 
@@ -403,8 +395,6 @@ def describe_instance_type_offerings(region_name="us-east-1", location_type="reg
         ec2_client = boto3.client("ec2", region_name=region_name)
         paginator = ec2_client.get_paginator("describe_instance_type_offerings")
         page_iterator = paginator.paginate(LocationType=location_type)
-        filtered_iterator = page_iterator.search("InstanceTypeOfferings")
-        for offering in filtered_iterator:
-            yield offering
+        yield from page_iterator.search("InstanceTypeOfferings")
     except botocore.exceptions.ClientError:
         pass

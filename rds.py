@@ -104,10 +104,8 @@ def scrape(output_file, input_file=None):
             attributes["instance_type"] = instance_type
             attributes["database_engine"] = attributes["databaseEngine"]
             attributes["arch"] = attributes.get("processorArchitecture", None)
-            attributes["pricing"] = {}
-            attributes["pricing"][region] = {}
-
-            if attributes.get("engineCode", None) == None:
+            attributes["pricing"] = {region: {}}
+            if attributes.get("engineCode", None) is None:
                 print(f"No Engine Code found. Ignoring instance with sku={sku}")
                 continue
 
@@ -231,27 +229,25 @@ def scrape(output_file, input_file=None):
                         instance["engineCode"]
                     ]["reserved"] = {}
 
-                reserved_type = "%s %s" % (
-                    offer["termAttributes"]["LeaseContractLength"],
-                    offer["termAttributes"]["PurchaseOption"],
+                reserved_type = f'{offer["termAttributes"]["LeaseContractLength"]} {offer["termAttributes"]["PurchaseOption"]}'
+
+
+                instances[instance["instance_type"]]["pricing"][
+                    instance["region"]
+                ][instance["engineCode"]]["reserved"][
+                    f'{reserved_mapping[reserved_type]}-{dimension["unit"].lower()}'
+                ] = float(
+                    dimension["pricePerUnit"]["USD"]
                 )
 
-                instances[instance["instance_type"]]["pricing"][instance["region"]][
-                    instance["engineCode"]
-                ]["reserved"][
-                    "%s-%s"
-                    % (reserved_mapping[reserved_type], dimension["unit"].lower())
+                instances[instance["instance_type"]]["pricing"][
+                    instance["region"]
+                ][instance["database_engine"]]["reserved"][
+                    f'{reserved_mapping[reserved_type]}-{dimension["unit"].lower()}'
                 ] = float(
                     dimension["pricePerUnit"]["USD"]
                 )
-                instances[instance["instance_type"]]["pricing"][instance["region"]][
-                    instance["database_engine"]
-                ]["reserved"][
-                    "%s-%s"
-                    % (reserved_mapping[reserved_type], dimension["unit"].lower())
-                ] = float(
-                    dimension["pricePerUnit"]["USD"]
-                )
+
 
     # Calculate all reserved effective pricings (upfront hourly + hourly price)
     for instance_type, instance in six.iteritems(instances):
@@ -314,9 +310,6 @@ def scrape(output_file, input_file=None):
 
 
 if __name__ == "__main__":
-    input_file = None
-    if len(sys.argv) > 1:
-        input_file = sys.argv[1]
-
+    input_file = sys.argv[1] if len(sys.argv) > 1 else None
     output_file = "./www/rds/instances.json"
     scrape(output_file, input_file)

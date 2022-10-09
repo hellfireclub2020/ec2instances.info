@@ -110,9 +110,7 @@ def scrape(output_file, input_file=None):
             attributes["family"] = attributes["instanceFamily"]
             attributes["instance_type"] = instance_type
             attributes["cache_engine"] = attributes["cacheEngine"]
-            attributes["pricing"] = {}
-            attributes["pricing"][region] = {}
-
+            attributes["pricing"] = {region: {}}
             caches_instances[sku] = attributes
 
             if instance_type not in instances.keys():
@@ -212,15 +210,17 @@ def scrape(output_file, input_file=None):
                         "reserved"
                     ] = {}
 
-                reserved_type = f"%s %s" % (
-                    offer["termAttributes"]["LeaseContractLength"],
-                    offer["termAttributes"]["PurchaseOption"],
+                reserved_type = f'{offer["termAttributes"]["LeaseContractLength"]} {offer["termAttributes"]["PurchaseOption"]}'
+
+
+                instances[instance_type]["pricing"][region][cache_engine][
+                    "reserved"
+                ][
+                    f'{reserved_mapping[reserved_type]}-{dimension["unit"].lower()}'
+                ] = float(
+                    dimension["pricePerUnit"]["USD"]
                 )
 
-                instances[instance_type]["pricing"][region][cache_engine]["reserved"][
-                    "%s-%s"
-                    % (reserved_mapping[reserved_type], dimension["unit"].lower())
-                ] = float(dimension["pricePerUnit"]["USD"])
 
     # Calculate all reserved effective pricings (upfront hourly + hourly price)
     # Since Light, Medium and Heavy utilization are from previous generations and are not available for choosing
@@ -284,9 +284,6 @@ def scrape(output_file, input_file=None):
 
 
 if __name__ == "__main__":
-    input_file = None
-    if len(sys.argv) > 1:
-        input_file = sys.argv[1]
-
+    input_file = sys.argv[1] if len(sys.argv) > 1 else None
     output_file = "./www/cache/instances.json"
     scrape(output_file, input_file)
